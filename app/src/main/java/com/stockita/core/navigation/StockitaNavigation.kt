@@ -107,11 +107,10 @@ fun StockitaAppNavigation() {
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .height(48.dp)
-                                        .width(58.dp)
+                                        .size(48.dp)
                                         .shadow(
                                             elevation = if (isSelected) 6.dp else 3.dp,
-                                            shape = RoundedCornerShape(14.dp),
+                                            shape = RoundedCornerShape(16.dp),
                                             spotColor = Orange.copy(alpha = 0.5f),
                                             ambientColor = Orange.copy(alpha = 0.25f)
                                         )
@@ -123,29 +122,16 @@ fun StockitaAppNavigation() {
                                                     listOf(Color(0xFFFF7A1A), Orange)
                                                 }
                                             ),
-                                            shape = RoundedCornerShape(14.dp)
+                                            shape = RoundedCornerShape(16.dp)
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = screen.icon,
-                                            contentDescription = screen.title,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = screen.title,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            maxLines = 1
-                                        )
-                                    }
+                                    Icon(
+                                        imageVector = screen.icon,
+                                        contentDescription = screen.title,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
                                 }
                             }
                         } else {
