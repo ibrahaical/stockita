@@ -3,7 +3,8 @@ package com.stockita.feature.tugas
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.stockita.core.database.entity.TaskEntity
-import com.stockita.feature.tugas.model.TaskPriority
+import com.stockita.feature.tugas.model.TaskCategory
+import com.stockita.feature.tugas.model.TaskDateFormatter
 import com.stockita.feature.tugas.model.TaskStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -14,16 +15,17 @@ data class TugasUiState(
     val isLoading: Boolean = false,
     val tasks: List<TaskEntity> = emptyList(),
     val searchQuery: String = "",
-    val selectedStatusTab: TaskStatus? = null, // null means "Semua"
-    val selectedPriorityFilter: TaskPriority? = null, // null means "Semua"
+    val selectedCategory: TaskCategory = TaskCategory.TODAY,
     val totalCount: Int = 0,
-    val todoCount: Int = 0,
-    val inProgressCount: Int = 0,
-    val doneCount: Int = 0,
+    val todayCount: Int = 0,
+    val scheduledCount: Int = 0,
+    val allCount: Int = 0,
+    val overdueCount: Int = 0,
+    val completedCount: Int = 0,
     val error: String? = null
 ) {
     val progressPercentage: Int
-        get() = if (totalCount > 0) (doneCount.toFloat() / totalCount * 100).toInt() else 0
+        get() = if (totalCount > 0) (completedCount.toFloat() / totalCount * 100).toInt() else 0
 }
 
 @HiltViewModel
@@ -34,49 +36,47 @@ class TugasViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
-    private val _selectedStatusTab = MutableStateFlow<TaskStatus?>(null)
-    val selectedStatusTab: StateFlow<TaskStatus?> = _selectedStatusTab
-
-    private val _selectedPriorityFilter = MutableStateFlow<TaskPriority?>(null)
-    val selectedPriorityFilter: StateFlow<TaskPriority?> = _selectedPriorityFilter
+    private val _selectedCategory = MutableStateFlow(TaskCategory.TODAY)
+    val selectedCategory: StateFlow<TaskCategory> = _selectedCategory
 
     val uiState: StateFlow<TugasUiState> = combine(
         taskRepository.getAllTasks(),
         _searchQuery,
-        _selectedStatusTab,
-        _selectedPriorityFilter
-    ) { allTasks, query, statusTab, priorityFilter ->
-        val todoCount = allTasks.count { TaskStatus.fromCode(it.status) == TaskStatus.TODO && !it.isDone }
-        val inProgressCount = allTasks.count { TaskStatus.fromCode(it.status) == TaskStatus.IN_PROGRESS && !it.isDone }
-        val doneCount = allTasks.count { it.isDone || TaskStatus.fromCode(it.status) == TaskStatus.DONE }
+        _selectedCategory
+    ) { allTasks, query, category ->
+        val todayCount = allTasks.count { TaskDateFormatter.isToday(it.dueAt) && !it.isDone }
+        val scheduledCount = allTasks.count { TaskDateFormatter.isScheduled(it.dueAt) && !it.isDone }
+        val allCount = allTasks.count { !it.isDone }
+        val overdueCount = allTasks.count { TaskDateFormatter.isOverdue(it.dueAt, it.isDone) }
+        val completedCount = allTasks.count { it.isDone }
 
-        val filtered = allTasks.filter { task ->
-            val taskStatus = if (task.isDone) TaskStatus.DONE else TaskStatus.fromCode(task.status)
+        val categoryFiltered = when (category) {
+            TaskCategory.TODAY -> allTasks.filter { TaskDateFormatter.isToday(it.dueAt) }
+            TaskCategory.SCHEDULED -> allTasks.filter { TaskDateFormatter.isScheduled(it.dueAt) }
+            TaskCategory.ALL -> allTasks
+            TaskCategory.OVERDUE -> allTasks.filter { TaskDateFormatter.isOverdue(it.dueAt, it.isDone) }
+        }
 
-            // Search Filter
-            val matchesSearch = query.isBlank() ||
-                    task.title.contains(query, ignoreCase = true) ||
-                    (task.note?.contains(query, ignoreCase = true) == true)
-
-            // Status Tab Filter
-            val matchesStatus = (statusTab == null) || (taskStatus == statusTab)
-
-            // Priority Filter
-            val matchesPriority = (priorityFilter == null) || (task.priority == priorityFilter.level)
-
-            matchesSearch && matchesStatus && matchesPriority
+        val searchFiltered = categoryFiltered.filter { task ->
+            if (query.isBlank()) true
+            else {
+                task.title.contains(query, ignoreCase = true) ||
+                        (task.note?.contains(query, ignoreCase = true) == true) ||
+                        (task.subTasks?.contains(query, ignoreCase = true) == true)
+            }
         }
 
         TugasUiState(
             isLoading = false,
-            tasks = filtered,
+            tasks = searchFiltered,
             searchQuery = query,
-            selectedStatusTab = statusTab,
-            selectedPriorityFilter = priorityFilter,
+            selectedCategory = category,
             totalCount = allTasks.size,
-            todoCount = todoCount,
-            inProgressCount = inProgressCount,
-            doneCount = doneCount
+            todayCount = todayCount,
+            scheduledCount = scheduledCount,
+            allCount = allCount,
+            overdueCount = overdueCount,
+            completedCount = completedCount
         )
     }.catch {
         emit(TugasUiState(error = it.message ?: "Terjadi kesalahan"))
@@ -90,17 +90,14 @@ class TugasViewModel @Inject constructor(
         _searchQuery.value = query
     }
 
-    fun setStatusTab(status: TaskStatus?) {
-        _selectedStatusTab.value = status
-    }
-
-    fun setPriorityFilter(priority: TaskPriority?) {
-        _selectedPriorityFilter.value = priority
+    fun selectCategory(category: TaskCategory) {
+        _selectedCategory.value = category
     }
 
     fun addTask(
         title: String,
-        note: String?,
+        note: String? = null,
+        subTasks: String? = null,
         priority: Int = 1,
         status: String = "TODO",
         dueAt: Long? = null
@@ -111,6 +108,7 @@ class TugasViewModel @Inject constructor(
                 TaskEntity(
                     title = title,
                     note = note,
+                    subTasks = subTasks,
                     dueAt = dueAt,
                     isDone = isDone,
                     priority = priority,
@@ -158,3 +156,4 @@ class TugasViewModel @Inject constructor(
         }
     }
 }
+

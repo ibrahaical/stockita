@@ -1,16 +1,18 @@
 package com.stockita.feature.tugas
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -19,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,10 +30,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.stockita.core.database.entity.TaskEntity
+import com.stockita.feature.tugas.model.TaskCategory
 import com.stockita.feature.tugas.model.TaskDateFormatter
 import com.stockita.feature.tugas.model.TaskPriority
 import com.stockita.feature.tugas.model.TaskStatus
 import com.stockita.ui.theme.*
+import java.util.Calendar
+
+private val InkSecondary = InkSoft
+private val Gray100 = Color(0xFFF3F4F6)
+private val Gray200 = Line
+private val Gray300 = Color(0xFFD1D5DB)
+private val Gray400 = Color(0xFF9CA3AF)
+private val Gray500 = InkSoft
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +53,7 @@ fun TugasScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var taskToEdit by remember { mutableStateOf<TaskEntity?>(null) }
     var taskToDelete by remember { mutableStateOf<TaskEntity?>(null) }
+    var taskToDetail by remember { mutableStateOf<TaskEntity?>(null) }
 
     Scaffold(
         floatingActionButton = {
@@ -59,7 +73,7 @@ fun TugasScreen(
                 .fillMaxSize()
                 .background(Color(0xFFFAFAFB))
         ) {
-            // 1. Header Ringkasan & Progress
+            // 1. Header Ringkasan & Progression Bar
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = Color.White,
@@ -72,13 +86,13 @@ fun TugasScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Daftar Tugas",
+                            text = "Tugas & To-Do",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = Ink
                         )
                         Text(
-                            text = "${uiState.doneCount} dari ${uiState.totalCount} selesai",
+                            text = "${uiState.completedCount} dari ${uiState.totalCount} selesai • ${uiState.progressPercentage}%",
                             style = MaterialTheme.typography.bodySmall,
                             color = InkSoft,
                             fontWeight = FontWeight.Medium
@@ -87,10 +101,10 @@ fun TugasScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Progress Bar
+                    // Linear Progression Indicator
                     LinearProgressIndicator(
                         progress = {
-                            if (uiState.totalCount > 0) uiState.doneCount.toFloat() / uiState.totalCount else 0f
+                            if (uiState.totalCount > 0) uiState.completedCount.toFloat() / uiState.totalCount else 0f
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -102,320 +116,363 @@ fun TugasScreen(
                 }
             }
 
-            // 2. Search Bar
-            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                OutlinedTextField(
-                    value = uiState.searchQuery,
-                    onValueChange = { viewModel.setSearchQuery(it) },
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 2. 4 Cards Filter Grid (2 baris x 2 kolom): Today, Scheduled, All, Overdue
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Cari tugas, restock, atau catatan...", color = InkSoft, fontSize = 14.sp) },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = InkSoft)
-                    },
-                    trailingIcon = {
-                        if (uiState.searchQuery.isNotBlank()) {
-                            IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                Icon(Icons.Default.Close, contentDescription = "Hapus", tint = InkSoft)
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                        focusedBorderColor = Orange,
-                        unfocusedBorderColor = Line
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    TaskCategoryCard(
+                        category = TaskCategory.TODAY,
+                        count = uiState.todayCount,
+                        isSelected = uiState.selectedCategory == TaskCategory.TODAY,
+                        icon = Icons.Default.Today,
+                        onClick = { viewModel.selectCategory(TaskCategory.TODAY) },
+                        modifier = Modifier.weight(1f)
                     )
-                )
+                    TaskCategoryCard(
+                        category = TaskCategory.SCHEDULED,
+                        count = uiState.scheduledCount,
+                        isSelected = uiState.selectedCategory == TaskCategory.SCHEDULED,
+                        icon = Icons.Default.Schedule,
+                        onClick = { viewModel.selectCategory(TaskCategory.SCHEDULED) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    TaskCategoryCard(
+                        category = TaskCategory.ALL,
+                        count = uiState.allCount,
+                        isSelected = uiState.selectedCategory == TaskCategory.ALL,
+                        icon = Icons.Default.FormatListBulleted,
+                        onClick = { viewModel.selectCategory(TaskCategory.ALL) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    TaskCategoryCard(
+                        category = TaskCategory.OVERDUE,
+                        count = uiState.overdueCount,
+                        isSelected = uiState.selectedCategory == TaskCategory.OVERDUE,
+                        icon = Icons.Default.Warning,
+                        onClick = { viewModel.selectCategory(TaskCategory.OVERDUE) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
-            // 3. Status Tabs (Semua, To Do, In Progress, Selesai)
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 3. Search Input (Placeholder ringkas "Search...")
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = { viewModel.setSearchQuery(it) },
+                placeholder = {
+                    Text("Search...", fontSize = 14.sp, color = InkSoft)
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = InkSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (uiState.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear",
+                                tint = InkSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    focusedBorderColor = Orange,
+                    unfocusedBorderColor = Gray200
+                )
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 4. Sub-title dinamis sesuai kartu yang dipencet
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Tab "Semua"
-                StatusTabChip(
-                    label = "Semua",
-                    count = uiState.totalCount,
-                    isSelected = uiState.selectedStatusTab == null,
-                    onClick = { viewModel.setStatusTab(null) }
+                Text(
+                    text = uiState.selectedCategory.subtitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Ink
                 )
 
-                // Tab "To Do"
-                StatusTabChip(
-                    label = "To Do",
-                    count = uiState.todoCount,
-                    isSelected = uiState.selectedStatusTab == TaskStatus.TODO,
-                    onClick = { viewModel.setStatusTab(TaskStatus.TODO) }
-                )
-
-                // Tab "In Progress"
-                StatusTabChip(
-                    label = "In Progress",
-                    count = uiState.inProgressCount,
-                    isSelected = uiState.selectedStatusTab == TaskStatus.IN_PROGRESS,
-                    onClick = { viewModel.setStatusTab(TaskStatus.IN_PROGRESS) }
-                )
-
-                // Tab "Selesai"
-                StatusTabChip(
-                    label = "Selesai",
-                    count = uiState.doneCount,
-                    isSelected = uiState.selectedStatusTab == TaskStatus.DONE,
-                    onClick = { viewModel.setStatusTab(TaskStatus.DONE) }
-                )
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = OrangeSoft
+                ) {
+                    Text(
+                        text = "${uiState.tasks.size} tugas",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Orange,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
             }
 
-            // 4. Priority Filter Chips
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Prioritas:", style = MaterialTheme.typography.labelMedium, color = InkSoft)
+            Spacer(modifier = Modifier.height(6.dp))
 
-                // All Priority
-                FilterChip(
-                    selected = uiState.selectedPriorityFilter == null,
-                    onClick = { viewModel.setPriorityFilter(null) },
-                    label = { Text("Semua", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = OrangeSoft,
-                        selectedLabelColor = OrangeDeep,
-                        containerColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, if (uiState.selectedPriorityFilter == null) Orange else Line),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                // High Priority
-                FilterChip(
-                    selected = uiState.selectedPriorityFilter == TaskPriority.HIGH,
-                    onClick = {
-                        viewModel.setPriorityFilter(if (uiState.selectedPriorityFilter == TaskPriority.HIGH) null else TaskPriority.HIGH)
-                    },
-                    label = { Text("🔴 Tinggi", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFFFEE2E2),
-                        selectedLabelColor = Color(0xFFDC2626),
-                        containerColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, if (uiState.selectedPriorityFilter == TaskPriority.HIGH) Color(0xFFDC2626) else Line),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                // Medium Priority
-                FilterChip(
-                    selected = uiState.selectedPriorityFilter == TaskPriority.MEDIUM,
-                    onClick = {
-                        viewModel.setPriorityFilter(if (uiState.selectedPriorityFilter == TaskPriority.MEDIUM) null else TaskPriority.MEDIUM)
-                    },
-                    label = { Text("🟡 Sedang", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFFFEF3C7),
-                        selectedLabelColor = Color(0xFFD97706),
-                        containerColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, if (uiState.selectedPriorityFilter == TaskPriority.MEDIUM) Color(0xFFD97706) else Line),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                // Low Priority
-                FilterChip(
-                    selected = uiState.selectedPriorityFilter == TaskPriority.LOW,
-                    onClick = {
-                        viewModel.setPriorityFilter(if (uiState.selectedPriorityFilter == TaskPriority.LOW) null else TaskPriority.LOW)
-                    },
-                    label = { Text("⚪ Rendah", fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFFF3F4F6),
-                        selectedLabelColor = Color(0xFF4B5563),
-                        containerColor = Color.White
-                    ),
-                    border = BorderStroke(1.dp, if (uiState.selectedPriorityFilter == TaskPriority.LOW) Color(0xFF4B5563) else Line),
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // 5. List of Task Cards
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = Orange)
-                } else if (uiState.error != null) {
-                    Text(text = uiState.error!!, color = Color(0xFFDC2626), modifier = Modifier.align(Alignment.Center))
-                } else if (uiState.tasks.isEmpty()) {
+            // 5. List To-Do Items
+            if (uiState.tasks.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = null,
-                            tint = Color(0xFFD1D5DB),
-                            modifier = Modifier.size(56.dp)
+                            tint = Orange.copy(alpha = 0.5f),
+                            modifier = Modifier.size(54.dp)
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = if (uiState.searchQuery.isNotBlank() || uiState.selectedStatusTab != null || uiState.selectedPriorityFilter != null)
-                                "Tidak ada tugas yang sesuai filter"
-                            else
-                                "Belum ada tugas. Tekan + untuk menambah!",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = InkSoft
+                            text = if (uiState.searchQuery.isNotBlank()) "Tidak ada tugas cocok" else "Tidak ada tugas",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Ink
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (uiState.searchQuery.isNotBlank()) "Coba kata kunci pencarian yang lain."
+                            else "Tekan tombol + untuk menambahkan tugas baru.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = InkSecondary
                         )
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(uiState.tasks, key = { it.id }) { task ->
-                            TaskCard(
-                                task = task,
-                                onCycleStatus = { viewModel.cycleTaskStatus(task) },
-                                onToggleDone = { checked -> viewModel.toggleTaskDone(task, checked) },
-                                onEdit = { taskToEdit = task },
-                                onDelete = { taskToDelete = task }
-                            )
-                        }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(uiState.tasks, key = { it.id }) { task ->
+                        TaskItemCard(
+                            task = task,
+                            onCardClick = { taskToDetail = task },
+                            onToggleDone = { viewModel.toggleTaskDone(task, it) },
+                            onEditClick = { taskToEdit = task },
+                            onDeleteClick = { taskToDelete = task }
+                        )
                     }
                 }
             }
         }
+    }
 
-        // Dialog Tambah Tugas
-        if (showAddDialog) {
-            TaskFormDialog(
-                title = "Tambah Tugas",
-                initialTask = null,
-                onDismiss = { showAddDialog = false },
-                onSave = { title, note, priority, status, dueAt ->
-                    viewModel.addTask(title, note, priority, status, dueAt)
-                    showAddDialog = false
-                }
-            )
-        }
+    // Modal Dialog Detail Tugas
+    taskToDetail?.let { task ->
+        TaskDetailDialog(
+            task = task,
+            onDismiss = { taskToDetail = null },
+            onCycleStatus = {
+                viewModel.cycleTaskStatus(task)
+                taskToDetail = null
+            },
+            onEdit = {
+                taskToDetail = null
+                taskToEdit = task
+            },
+            onDelete = {
+                taskToDetail = null
+                taskToDelete = task
+            }
+        )
+    }
 
-        // Dialog Edit Tugas
-        taskToEdit?.let { task ->
-            TaskFormDialog(
-                title = "Edit Tugas",
-                initialTask = task,
-                onDismiss = { taskToEdit = null },
-                onSave = { title, note, priority, status, dueAt ->
-                    viewModel.updateTask(
-                        task.copy(
-                            title = title,
-                            note = note,
-                            priority = priority,
-                            status = status,
-                            isDone = (status == TaskStatus.DONE.code),
-                            dueAt = dueAt
-                        )
+    // Modal Dialog Tambah Tugas Baru
+    if (showAddDialog) {
+        TaskFormDialog(
+            title = "Tambah Tugas Baru",
+            initialTask = null,
+            onDismiss = { showAddDialog = false },
+            onSave = { title, note, subTasks, priority, status, dueAt ->
+                viewModel.addTask(
+                    title = title,
+                    note = note,
+                    subTasks = subTasks,
+                    priority = priority,
+                    status = status,
+                    dueAt = dueAt
+                )
+                showAddDialog = false
+            }
+        )
+    }
+
+    // Modal Dialog Edit Tugas
+    taskToEdit?.let { task ->
+        TaskFormDialog(
+            title = "Edit Tugas",
+            initialTask = task,
+            onDismiss = { taskToEdit = null },
+            onSave = { title, note, subTasks, priority, status, dueAt ->
+                val isDone = (status == "DONE")
+                viewModel.updateTask(
+                    task.copy(
+                        title = title,
+                        note = note,
+                        subTasks = subTasks,
+                        priority = priority,
+                        status = status,
+                        dueAt = dueAt,
+                        isDone = isDone
                     )
-                    taskToEdit = null
-                }
-            )
-        }
+                )
+                taskToEdit = null
+            }
+        )
+    }
 
-        // Dialog Konfirmasi Hapus
-        taskToDelete?.let { task ->
-            AlertDialog(
-                onDismissRequest = { taskToDelete = null },
-                title = { Text("Hapus Tugas", fontWeight = FontWeight.Bold) },
-                text = { Text("Apakah Anda yakin ingin menghapus tugas \"${task.title}\"?") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            viewModel.deleteTask(task)
-                            taskToDelete = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
-                    ) {
-                        Text("Hapus", color = Color.White)
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(onClick = { taskToDelete = null }) {
-                        Text("Batal")
-                    }
-                }
-            )
-        }
+    // Modal Konfirmasi Hapus Tugas
+    taskToDelete?.let { task ->
+        DeleteConfirmationDialog(
+            taskTitle = task.title,
+            onDismiss = { taskToDelete = null },
+            onConfirm = {
+                viewModel.deleteTask(task)
+                taskToDelete = null
+            }
+        )
     }
 }
 
+/**
+ * 2x2 Grid Card untuk Today, Scheduled, All, dan Overdue
+ */
 @Composable
-fun StatusTabChip(
-    label: String,
+private fun TaskCategoryCard(
+    category: TaskCategory,
     count: Int,
     isSelected: Boolean,
-    onClick: () -> Unit
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val activeBorderColor = Orange
+    val activeBgColor = OrangeSoft
+    val inactiveBgColor = Color.White
+    val inactiveBorderColor = Gray200
+
     Surface(
-        modifier = Modifier.clickable { onClick() },
-        color = if (isSelected) Orange else Color.White,
+        onClick = onClick,
+        modifier = modifier.height(86.dp),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, if (isSelected) Orange else Line),
+        color = if (isSelected) activeBgColor else inactiveBgColor,
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) activeBorderColor else inactiveBorderColor),
         shadowElevation = if (isSelected) 2.dp else 0.dp
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = label,
-                fontSize = 13.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isSelected) Color.White else Ink
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Surface(
-                color = if (isSelected) Color.White.copy(alpha = 0.25f) else Color(0xFFF3F4F6),
-                shape = CircleShape
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(if (isSelected) Orange else Color(0xFFF3F4F6), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = category.label,
+                        tint = if (isSelected) Color.White else InkSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
                 Text(
-                    text = "$count",
-                    fontSize = 11.sp,
+                    text = count.toString(),
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isSelected) Color.White else InkSoft,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                    color = if (isSelected) Orange else Ink
                 )
             }
+
+            Text(
+                text = category.label,
+                fontSize = 13.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) Orange else Ink
+            )
         }
     }
 }
 
+/**
+ * Kartu Utama Daftar To-Do
+ * Spesifikasi UX:
+ * - Kiri: Checkbox
+ * - Atas: DateTime kecil (Today, 4:50 PM)
+ * - Tengah: Title
+ * - Bawah: Poin-poin sub-task
+ * - Kanan: Action edit dan hapus
+ * - Status & Priority TIDAK DITAMPILKAN di sini (hanya di Detail View).
+ */
 @Composable
-fun TaskCard(
+private fun TaskItemCard(
     task: TaskEntity,
-    onCycleStatus: () -> Unit,
+    onCardClick: () -> Unit,
     onToggleDone: (Boolean) -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
-    val status = if (task.isDone) TaskStatus.DONE else TaskStatus.fromCode(task.status)
-    val priority = TaskPriority.fromLevel(task.priority)
-    val dueDateStr = TaskDateFormatter.formatDueDate(task.dueAt)
-    val isOverdue = TaskDateFormatter.isOverdue(task.dueAt) && status != TaskStatus.DONE
+    val formattedDateTime = TaskDateFormatter.formatCardDateTime(task.dueAt)
+    val isOverdue = TaskDateFormatter.isOverdue(task.dueAt, task.isDone)
+    val subTasks = task.subTaskList
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onCardClick),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = BorderStroke(0.5.dp, Line)
+        border = BorderStroke(1.dp, Gray200),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -423,159 +480,393 @@ fun TaskCard(
                 .padding(14.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // Quick Status Checkbox
+            // Checkbox di sisi kiri
             Checkbox(
                 checked = task.isDone,
                 onCheckedChange = onToggleDone,
                 colors = CheckboxDefaults.colors(
                     checkedColor = Orange,
-                    uncheckedColor = InkSoft
-                )
+                    checkmarkColor = Color.White
+                ),
+                modifier = Modifier.offset(x = (-4).dp, y = (-2).dp)
             )
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
-            // Main Info
+            // Konten Tengah
             Column(modifier = Modifier.weight(1f)) {
-                // Title
+                // Tanggal & Waktu kecil di atas (misal Today, 4:50 PM)
+                if (formattedDateTime != null) {
+                    val dateText = if (isOverdue) "Overdue • $formattedDateTime" else formattedDateTime
+                    val dateColor = if (isOverdue) Color(0xFFDC2626) else if (task.isDone) Gray400 else Orange
+
+                    Text(
+                        text = dateText,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = dateColor
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                }
+
+                // Title Tugas
                 Text(
                     text = task.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
+                    color = if (task.isDone) Gray400 else Ink,
                     textDecoration = if (task.isDone) TextDecoration.LineThrough else null,
-                    color = if (task.isDone) InkSoft else Ink,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                // Optional Note
-                if (!task.note.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = task.note,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InkSoft,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Badges Row: Status Pill, Priority Pill, Due Date Pill
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Status Badge (Clickable to cycle!)
-                    Surface(
-                        modifier = Modifier.clickable { onCycleStatus() },
-                        shape = RoundedCornerShape(8.dp),
-                        color = when (status) {
-                            TaskStatus.TODO -> Color(0xFFF3F4F6)
-                            TaskStatus.IN_PROGRESS -> OrangeSoft
-                            TaskStatus.DONE -> Color(0xFFDCFCE7)
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = status.label,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = when (status) {
-                                    TaskStatus.TODO -> Color(0xFF4B5563)
-                                    TaskStatus.IN_PROGRESS -> OrangeDeep
-                                    TaskStatus.DONE -> Color(0xFF16A34A)
-                                }
-                            )
-                        }
-                    }
-
-                    // Priority Badge
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = priority.badgeBg
-                    ) {
-                        Text(
-                            text = priority.label,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = priority.color,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-
-                    // Due Date Badge
-                    if (dueDateStr != null) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isOverdue) Color(0xFFFEE2E2) else Color(0xFFF3F4F6)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = if (isOverdue) Icons.Default.Warning else Icons.Default.DateRange,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(12.dp),
-                                    tint = if (isOverdue) Color(0xFFDC2626) else InkSoft
+                // Poin-poin Sub Task (bullet items)
+                if (subTasks.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        subTasks.take(4).forEach { item ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(4.dp)
+                                        .background(if (task.isDone) Gray300 else Orange, CircleShape)
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (isOverdue) "Terlewat: $dueDateStr" else dueDateStr,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (isOverdue) Color(0xFFDC2626) else Ink
+                                    text = item,
+                                    fontSize = 12.sp,
+                                    color = if (task.isDone) Gray400 else InkSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
+                        }
+                        if (subTasks.size > 4) {
+                            Text(
+                                text = "+ ${subTasks.size - 4} lainnya",
+                                fontSize = 11.sp,
+                                color = InkSoft,
+                                modifier = Modifier.padding(start = 10.dp)
+                            )
                         }
                     }
                 }
             }
 
-            // Actions: Edit and Delete
-            Row {
-                IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit", tint = InkSoft, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Action Edit & Hapus di sisi kanan
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(
+                    onClick = onEditClick,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit",
+                        tint = InkSecondary,
+                        modifier = Modifier.size(17.dp)
+                    )
                 }
-                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.DeleteOutline, contentDescription = "Hapus", tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+
+                IconButton(
+                    onClick = onDeleteClick,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = "Hapus",
+                        tint = Color(0xFFDC2626),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
     }
 }
 
+/**
+ * Detail View Dialog
+ * Menampilkan rincian Status, Prioritas, Sub-tasks, dan info lengkap tugas.
+ */
 @Composable
-fun TaskFormDialog(
+private fun TaskDetailDialog(
+    task: TaskEntity,
+    onDismiss: () -> Unit,
+    onCycleStatus: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val currentStatus = if (task.isDone) TaskStatus.DONE else TaskStatus.fromCode(task.status)
+    val priority = TaskPriority.fromLevel(task.priority)
+    val subTasks = task.subTaskList
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Detail Tugas",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Ink
+                )
+                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Tutup", tint = InkSecondary)
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Judul
+                Text(
+                    text = task.title,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Ink
+                )
+
+                Divider(color = Gray200)
+
+                // Status & Prioritas di Detail View
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Status Pill
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = when (currentStatus) {
+                            TaskStatus.TODO -> Color(0xFFEFF6FF)
+                            TaskStatus.IN_PROGRESS -> OrangeSoft
+                            TaskStatus.DONE -> Color(0xFFECFDF5)
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            when (currentStatus) {
+                                TaskStatus.TODO -> Color(0xFFBFDBFE)
+                                TaskStatus.IN_PROGRESS -> Orange
+                                TaskStatus.DONE -> Color(0xFFA7F3D0)
+                            }
+                        ),
+                        modifier = Modifier.clickable { onCycleStatus() }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "Status: ${currentStatus.label}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = when (currentStatus) {
+                                    TaskStatus.TODO -> Color(0xFF1D4ED8)
+                                    TaskStatus.IN_PROGRESS -> Orange
+                                    TaskStatus.DONE -> Color(0xFF047857)
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Ganti Status",
+                                modifier = Modifier.size(13.dp),
+                                tint = Orange
+                            )
+                        }
+                    }
+
+                    // Priority Pill
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = priority.badgeBg,
+                        border = BorderStroke(1.dp, priority.color.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = "Prioritas: ${priority.label}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = priority.color,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+
+                // Waktu Tenggat
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarToday,
+                        contentDescription = null,
+                        tint = Orange,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = TaskDateFormatter.formatDetailDateTime(task.dueAt),
+                        fontSize = 13.sp,
+                        color = InkSecondary
+                    )
+                }
+
+                // Sub-tasks checklist
+                if (subTasks.isNotEmpty()) {
+                    Text(
+                        text = "Daftar Sub-tugas:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF9FAFB), RoundedCornerShape(10.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        subTasks.forEach { subItem ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Orange,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = subItem,
+                                    fontSize = 13.sp,
+                                    color = Ink
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Catatan
+                if (!task.note.isNullOrBlank()) {
+                    Text(
+                        text = "Catatan:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Ink
+                    )
+                    Text(
+                        text = task.note,
+                        fontSize = 13.sp,
+                        color = InkSecondary,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF9FAFB), RoundedCornerShape(10.dp))
+                            .padding(10.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onEdit,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Orange)
+                ) {
+                    Text("Edit", color = Orange, fontWeight = FontWeight.SemiBold)
+                }
+                Button(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Orange)
+                ) {
+                    Text("Tutup", color = Color.White, fontWeight = FontWeight.SemiBold)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDelete) {
+                Text("Hapus", color = Color(0xFFDC2626), fontWeight = FontWeight.SemiBold)
+            }
+        }
+    )
+}
+
+/**
+ * Dialog Form Tambah / Edit Tugas
+ * Dilengkapi dengan Input Kalender (DatePicker) & Jam (TimePicker),
+ * serta input poin-poin sub-task.
+ */
+@Composable
+private fun TaskFormDialog(
     title: String,
     initialTask: TaskEntity?,
     onDismiss: () -> Unit,
-    onSave: (title: String, note: String?, priority: Int, status: String, dueAt: Long?) -> Unit
+    onSave: (title: String, note: String?, subTasks: String?, priority: Int, status: String, dueAt: Long?) -> Unit
 ) {
+    val context = LocalContext.current
     var taskTitle by remember { mutableStateOf(initialTask?.title ?: "") }
     var taskNote by remember { mutableStateOf(initialTask?.note ?: "") }
-    var selectedPriority by remember { mutableStateOf(TaskPriority.fromLevel(initialTask?.priority ?: 1)) }
-    var selectedStatus by remember { mutableStateOf(TaskStatus.fromCode(initialTask?.status)) }
+    var selectedPriority by remember { mutableStateOf(initialTask?.priority ?: 1) }
+    var selectedStatus by remember { mutableStateOf(initialTask?.status ?: "TODO") }
     var selectedDueAt by remember { mutableStateOf<Long?>(initialTask?.dueAt) }
 
-    val quickDates = remember {
-        val now = System.currentTimeMillis()
-        val oneDay = 24 * 3600_000L
-        listOf(
-            "Tanpa Tenggat" to null,
-            "Hari Ini" to now,
-            "Besok" to (now + oneDay),
-            "3 Hari" to (now + 3 * oneDay),
-            "1 Minggu" to (now + 7 * oneDay)
-        )
+    // Sub-tasks state
+    val existingSubTasks = remember(initialTask) {
+        initialTask?.subTaskList?.toMutableStateList() ?: mutableStateListOf()
+    }
+    var newSubTaskInput by remember { mutableStateOf("") }
+
+    // Kalender (DatePickerDialog)
+    val calendar = Calendar.getInstance().apply {
+        if (selectedDueAt != null) timeInMillis = selectedDueAt!!
+    }
+
+    val openDatePicker = {
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                val cal = Calendar.getInstance().apply {
+                    if (selectedDueAt != null) timeInMillis = selectedDueAt!!
+                    set(Calendar.YEAR, year)
+                    set(Calendar.MONTH, month)
+                    set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                }
+                selectedDueAt = cal.timeInMillis
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    // Waktu (TimePickerDialog)
+    val openTimePicker = {
+        TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                val cal = Calendar.getInstance().apply {
+                    if (selectedDueAt != null) timeInMillis = selectedDueAt!!
+                    set(Calendar.HOUR_OF_DAY, hourOfDay)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, 0)
+                }
+                selectedDueAt = cal.timeInMillis
+            },
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            true // 24 hour
+        ).show()
     }
 
     AlertDialog(
@@ -598,104 +889,313 @@ fun TaskFormDialog(
                     shape = RoundedCornerShape(12.dp)
                 )
 
+                // Input Kalender dan Waktu
+                Text(
+                    text = "Tenggat Waktu (Kalender & Jam)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = InkSecondary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Tombol Kalender
+                    OutlinedButton(
+                        onClick = openDatePicker,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, if (selectedDueAt != null) Orange else Gray300)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = "Pilih Tanggal",
+                            modifier = Modifier.size(16.dp),
+                            tint = if (selectedDueAt != null) Orange else InkSecondary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = TaskDateFormatter.formatDateOnly(selectedDueAt),
+                            fontSize = 12.sp,
+                            color = if (selectedDueAt != null) Ink else InkSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Tombol Jam/Waktu
+                    OutlinedButton(
+                        onClick = openTimePicker,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, if (selectedDueAt != null) Orange else Gray300)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Schedule,
+                            contentDescription = "Pilih Waktu",
+                            modifier = Modifier.size(16.dp),
+                            tint = if (selectedDueAt != null) Orange else InkSecondary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = TaskDateFormatter.formatTimeOnly(selectedDueAt),
+                            fontSize = 12.sp,
+                            color = if (selectedDueAt != null) Ink else InkSecondary
+                        )
+                    }
+                }
+
+                // Tombol Hapus Tenggat
+                if (selectedDueAt != null) {
+                    TextButton(
+                        onClick = { selectedDueAt = null },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text("Hapus Tenggat Waktu", fontSize = 11.sp, color = Color(0xFFDC2626))
+                    }
+                }
+
+                Divider(color = Gray200)
+
+                // Input Poin-poin Sub-task (misal: Pick up bag, Rice, Meat)
+                Text(
+                    text = "Poin-poin Sub-tugas",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = InkSecondary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = newSubTaskInput,
+                        onValueChange = { newSubTaskInput = it },
+                        placeholder = { Text("Tambah poin (mis: Rice)...", fontSize = 13.sp) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = {
+                            if (newSubTaskInput.isNotBlank()) {
+                                existingSubTasks.add(newSubTaskInput.trim())
+                                newSubTaskInput = ""
+                            }
+                        },
+                        modifier = Modifier
+                            .background(Orange, RoundedCornerShape(10.dp))
+                            .size(46.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Tambah Poin",
+                            tint = Color.White
+                        )
+                    }
+                }
+
+                // List Sub-tasks yang sudah dimasukkan
+                if (existingSubTasks.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF9FAFB), RoundedCornerShape(10.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        existingSubTasks.forEachIndexed { index, subItem ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(5.dp)
+                                            .background(Orange, CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = subItem,
+                                        fontSize = 13.sp,
+                                        color = Ink
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { existingSubTasks.removeAt(index) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Hapus Poin",
+                                        tint = Gray500,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Divider(color = Gray200)
+
+                // Prioritas Tugas
+                Text(
+                    text = "Prioritas",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = InkSecondary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        TaskPriority.LOW,
+                        TaskPriority.MEDIUM,
+                        TaskPriority.HIGH
+                    ).forEach { p ->
+                        val isSelected = selectedPriority == p.level
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedPriority = p.level },
+                            label = { Text(p.label, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = p.badgeBg,
+                                selectedLabelColor = p.color
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = if (isSelected) p.color else Gray200
+                            )
+                        )
+                    }
+                }
+
+                // Status Tugas
+                Text(
+                    text = "Status",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = InkSecondary
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        TaskStatus.TODO,
+                        TaskStatus.IN_PROGRESS,
+                        TaskStatus.DONE
+                    ).forEach { s ->
+                        val isSelected = selectedStatus == s.code
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedStatus = s.code },
+                            label = { Text(s.label, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = OrangeSoft,
+                                selectedLabelColor = Orange
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = if (isSelected) Orange else Gray200
+                            )
+                        )
+                    }
+                }
+
                 // Catatan
                 OutlinedTextField(
                     value = taskNote,
                     onValueChange = { taskNote = it },
-                    label = { Text("Catatan (Opsional)") },
+                    label = { Text("Catatan Tambahan (Opsional)") },
                     maxLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 )
-
-                // Status Selector
-                Text("Status:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = Ink)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    TaskStatus.entries.forEach { st ->
-                        val isSel = st == selectedStatus
-                        FilterChip(
-                            selected = isSel,
-                            onClick = { selectedStatus = st },
-                            label = { Text(st.label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Orange,
-                                selectedLabelColor = Color.White
-                            ),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                    }
-                }
-
-                // Priority Selector
-                Text("Prioritas:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = Ink)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    TaskPriority.entries.forEach { pr ->
-                        val isSel = pr == selectedPriority
-                        FilterChip(
-                            selected = isSel,
-                            onClick = { selectedPriority = pr },
-                            label = { Text(pr.label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = pr.badgeBg,
-                                selectedLabelColor = pr.color
-                            ),
-                            border = BorderStroke(1.dp, if (isSel) pr.color else Line),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                    }
-                }
-
-                // Due Date Selector
-                Text("Tenggat Waktu:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = Ink)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    quickDates.forEach { (label, ts) ->
-                        val isSel = if (ts == null) selectedDueAt == null else (selectedDueAt != null && TaskDateFormatter.formatDueDate(selectedDueAt) == TaskDateFormatter.formatDueDate(ts))
-                        FilterChip(
-                            selected = isSel,
-                            onClick = { selectedDueAt = ts },
-                            label = { Text(label, fontSize = 11.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = OrangeSoft,
-                                selectedLabelColor = OrangeDeep
-                            ),
-                            border = BorderStroke(1.dp, if (isSel) Orange else Line),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                    }
-                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    onSave(
-                        taskTitle.trim(),
-                        taskNote.trim().ifBlank { null },
-                        selectedPriority.level,
-                        selectedStatus.code,
-                        selectedDueAt
-                    )
+                    if (taskTitle.isNotBlank()) {
+                        val subTasksText = if (existingSubTasks.isEmpty()) null
+                        else existingSubTasks.joinToString("\n")
+
+                        onSave(
+                            taskTitle.trim(),
+                            taskNote.trim().ifBlank { null },
+                            subTasksText,
+                            selectedPriority,
+                            selectedStatus,
+                            selectedDueAt
+                        )
+                    }
                 },
                 enabled = taskTitle.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Orange)
+                colors = ButtonDefaults.buttonColors(containerColor = Orange),
+                shape = RoundedCornerShape(10.dp)
             ) {
-                Text("Simpan", color = Color.White)
+                Text("Simpan", color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) {
-                Text("Batal")
+            TextButton(onClick = onDismiss) {
+                Text("Batal", color = InkSecondary)
+            }
+        }
+    )
+}
+
+/**
+ * Dialog Konfirmasi Hapus Tugas
+ */
+@Composable
+private fun DeleteConfirmationDialog(
+    taskTitle: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.DeleteOutline,
+                contentDescription = null,
+                tint = Color(0xFFDC2626),
+                modifier = Modifier.size(36.dp)
+            )
+        },
+        title = { Text("Hapus Tugas", fontWeight = FontWeight.Bold, color = Ink) },
+        text = {
+            Text(
+                "Apakah Anda yakin ingin menghapus tugas \"$taskTitle\"? Tindakan ini tidak dapat dibatalkan.",
+                color = InkSecondary,
+                fontSize = 14.sp
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Hapus", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Batal", color = InkSecondary)
             }
         }
     )

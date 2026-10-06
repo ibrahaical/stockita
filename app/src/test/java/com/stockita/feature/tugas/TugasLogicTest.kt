@@ -85,20 +85,35 @@ class TugasLogicTest {
     }
 
     @Test
-    fun `TaskDateFormatter identifies today tomorrow and overdue correctly`() {
+    fun `TaskDateFormatter identifies today scheduled and overdue correctly`() {
         val now = System.currentTimeMillis()
         val oneDay = 24 * 3600_000L
 
-        assertEquals("Hari ini", TaskDateFormatter.formatDueDate(now))
-        assertEquals("Besok", TaskDateFormatter.formatDueDate(now + oneDay))
+        assertTrue(TaskDateFormatter.isToday(now))
+        assertFalse(TaskDateFormatter.isScheduled(now))
+
+        // Tomorrow is scheduled
+        val tomorrow = now + 2 * oneDay
+        assertTrue(TaskDateFormatter.isScheduled(tomorrow))
 
         // Past timestamp is overdue
         val yesterday = now - 2 * oneDay
-        assertTrue(TaskDateFormatter.isOverdue(yesterday))
+        assertTrue(TaskDateFormatter.isOverdue(yesterday, isDone = false))
+        assertFalse(TaskDateFormatter.isOverdue(yesterday, isDone = true))
+    }
 
-        // Future timestamp is not overdue
-        val tomorrow = now + 2 * oneDay
-        assertFalse(TaskDateFormatter.isOverdue(tomorrow))
+    @Test
+    fun `TaskEntity subTaskList parses newline delimited subtasks accurately`() {
+        val taskWithSubTasks = TaskEntity(
+            id = 1L,
+            title = "Beli Bahan",
+            subTasks = "Pick up bag\nRice\nMeat"
+        )
+        val expected = listOf("Pick up bag", "Rice", "Meat")
+        assertEquals(expected, taskWithSubTasks.subTaskList)
+
+        val taskEmptySubTasks = TaskEntity(id = 2L, title = "Kosong", subTasks = null)
+        assertTrue(taskEmptySubTasks.subTaskList.isEmpty())
     }
 
     @Test

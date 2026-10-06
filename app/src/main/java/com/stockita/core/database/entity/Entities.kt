@@ -107,6 +107,7 @@ data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
     val note: String? = null,
+    val subTasks: String? = null,
     val dueAt: Long? = null,
     val isDone: Boolean = false,
     val priority: Int = 1, // 0: Rendah, 1: Sedang, 2: Tinggi
@@ -114,4 +115,7 @@ data class TaskEntity(
     val refType: String? = null, // "MATERIAL" | "PRODUCT" | "EXPENSE" | null
     val refId: Long? = null,
     val createdAt: Long = System.currentTimeMillis()
-)
+) {
+    val subTaskList: List<String>
+        get() = subTasks?.lines()?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+}
