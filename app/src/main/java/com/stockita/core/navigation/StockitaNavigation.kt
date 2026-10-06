@@ -107,35 +107,46 @@ fun StockitaAppNavigation() {
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(46.dp)
+                                        .height(48.dp)
+                                        .width(58.dp)
                                         .shadow(
-                                            elevation = if (isSelected) 8.dp else 4.dp,
-                                            shape = RoundedCornerShape(16.dp),
-                                            spotColor = Orange.copy(alpha = 0.6f),
-                                            ambientColor = Orange.copy(alpha = 0.3f)
+                                            elevation = if (isSelected) 6.dp else 3.dp,
+                                            shape = RoundedCornerShape(14.dp),
+                                            spotColor = Orange.copy(alpha = 0.5f),
+                                            ambientColor = Orange.copy(alpha = 0.25f)
                                         )
                                         .background(
                                             brush = Brush.verticalGradient(
-                                                colors = listOf(Color(0xFFFF7A1A), Orange)
+                                                colors = if (isSelected) {
+                                                    listOf(Color(0xFFFF8526), Color(0xFFFF5200))
+                                                } else {
+                                                    listOf(Color(0xFFFF7A1A), Orange)
+                                                }
                                             ),
-                                            shape = RoundedCornerShape(16.dp)
+                                            shape = RoundedCornerShape(14.dp)
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = screen.icon,
-                                        contentDescription = screen.title,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = screen.icon,
+                                            contentDescription = screen.title,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = screen.title,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
-                                Spacer(modifier = Modifier.height(3.dp))
-                                Text(
-                                    text = screen.title,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) Orange else InkSoft
-                                )
                             }
                         } else {
                             // Tombol navigasi standar (Beranda, Stok, Tugas, Lainnya)
