@@ -2,11 +2,15 @@ package com.stockita.feature.tugas
 
 import com.stockita.core.database.entity.TaskEntity
 import com.stockita.fakes.FakeTaskDao
+import com.stockita.feature.tugas.model.TaskDateFormatter
+import com.stockita.feature.tugas.model.TaskPriority
+import com.stockita.feature.tugas.model.TaskStatus
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import java.util.Calendar
 
 class TugasLogicTest {
 
@@ -61,9 +65,46 @@ class TugasLogicTest {
     }
 
     @Test
+    fun `deleteTask successfully removes task from repository`() = runTest {
+        val task = TaskEntity(id = 1L, title = "Task Hapus", isDone = false)
+        taskRepository.insertTask(task)
+
+        var tasks = taskRepository.getAllTasks().first()
+        assertEquals(1, tasks.size)
+
+        taskRepository.deleteTask(task)
+        tasks = taskRepository.getAllTasks().first()
+        assertTrue(tasks.isEmpty())
+    }
+
+    @Test
+    fun `TaskStatus cycle progresses from TODO to IN_PROGRESS to DONE and back to TODO`() {
+        assertEquals(TaskStatus.IN_PROGRESS, TaskStatus.TODO.nextStatus())
+        assertEquals(TaskStatus.DONE, TaskStatus.IN_PROGRESS.nextStatus())
+        assertEquals(TaskStatus.TODO, TaskStatus.DONE.nextStatus())
+    }
+
+    @Test
+    fun `TaskDateFormatter identifies today tomorrow and overdue correctly`() {
+        val now = System.currentTimeMillis()
+        val oneDay = 24 * 3600_000L
+
+        assertEquals("Hari ini", TaskDateFormatter.formatDueDate(now))
+        assertEquals("Besok", TaskDateFormatter.formatDueDate(now + oneDay))
+
+        // Past timestamp is overdue
+        val yesterday = now - 2 * oneDay
+        assertTrue(TaskDateFormatter.isOverdue(yesterday))
+
+        // Future timestamp is not overdue
+        val tomorrow = now + 2 * oneDay
+        assertFalse(TaskDateFormatter.isOverdue(tomorrow))
+    }
+
+    @Test
     fun `tasks sorting prioritizes incomplete tasks before completed tasks`() = runTest {
-        val task1 = TaskEntity(id = 1L, title = "Task Selesai", isDone = true)
-        val task2 = TaskEntity(id = 2L, title = "Task Belum", isDone = false)
+        val task1 = TaskEntity(id = 1L, title = "Task Selesai", isDone = true, priority = 0)
+        val task2 = TaskEntity(id = 2L, title = "Task Belum", isDone = false, priority = 2)
 
         taskRepository.insertTask(task1)
         taskRepository.insertTask(task2)

@@ -101,7 +101,7 @@ data class ExpenseEntity(
 
 @Entity(
     tableName = "tasks",
-    indices = [Index("isDone", "dueAt")]
+    indices = [Index("isDone", "dueAt"), Index("status")]
 )
 data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -109,7 +109,8 @@ data class TaskEntity(
     val note: String? = null,
     val dueAt: Long? = null,
     val isDone: Boolean = false,
-    val priority: Int = 0,
+    val priority: Int = 1, // 0: Rendah, 1: Sedang, 2: Tinggi
+    val status: String = "TODO", // "TODO", "IN_PROGRESS", "DONE"
     val refType: String? = null, // "MATERIAL" | "PRODUCT" | "EXPENSE" | null
     val refId: Long? = null,
     val createdAt: Long = System.currentTimeMillis()

@@ -108,7 +108,12 @@ class FakeTaskDao : TaskDao {
 
     override suspend fun updateTask(task: TaskEntity) {
         val updated = tasks.value.map { if (it.id == task.id) task else it }
-        tasks.value = updated.sortedWith(compareBy({ it.isDone }, { it.dueAt ?: Long.MAX_VALUE }))
+        tasks.value = updated.sortedWith(compareBy({ it.isDone }, { -it.priority }, { it.dueAt ?: Long.MAX_VALUE }))
+    }
+
+    override suspend fun deleteTask(task: TaskEntity) {
+        val updated = tasks.value.filter { it.id != task.id }
+        tasks.value = updated
     }
 }
 

@@ -17,7 +17,7 @@ import com.stockita.core.database.entity.*
         ExpenseEntity::class,
         TaskEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class StockitaDatabase : RoomDatabase() {

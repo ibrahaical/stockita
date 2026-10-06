@@ -26,7 +26,7 @@ object DatabaseModule {
             context,
             StockitaDatabase::class.java,
             "stockita.db"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
     }
 
     @Provides

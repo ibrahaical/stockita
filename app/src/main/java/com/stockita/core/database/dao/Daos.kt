@@ -45,7 +45,7 @@ interface TransactionDao {
 
 @Dao
 interface TaskDao {
-    @Query("SELECT * FROM tasks ORDER BY isDone ASC, dueAt ASC")
+    @Query("SELECT * FROM tasks ORDER BY isDone ASC, priority DESC, dueAt ASC")
     fun getAllTasks(): Flow<List<TaskEntity>>
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -53,6 +53,9 @@ interface TaskDao {
     
     @Update
     suspend fun updateTask(task: TaskEntity)
+
+    @Delete
+    suspend fun deleteTask(task: TaskEntity)
 }
 
 @Dao
