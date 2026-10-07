@@ -11,6 +11,22 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * Representasi State UI untuk Layar Tugas.
+ *
+ * @property isLoading Menandakan data sedang dimuat pertama kali.
+ * @property tasks Daftar tugas hasil filter kategori & pencarian.
+ * @property searchQuery Kata kunci pencarian pengguna.
+ * @property selectedCategory Filter tab kategori aktif (TODAY, SCHEDULED, DONE, ALL).
+ * @property totalCount Total keseluruhan tugas di database.
+ * @property todayCount Jumlah tugas aktif hari ini.
+ * @property scheduledCount Jumlah tugas aktif mendatang.
+ * @property doneCount Jumlah tugas yang telah selesai.
+ * @property allCount Total tugas aktif maupun selesai.
+ * @property overdueCount Jumlah tugas aktif yang melewati tenggat waktu.
+ * @property completedCount Jumlah tugas dengan status selesai.
+ * @property error Pesan kesalahan jika terjadi kegagalan operasi.
+ */
 data class TugasUiState(
     val isLoading: Boolean = false,
     val tasks: List<TaskEntity> = emptyList(),
@@ -19,15 +35,28 @@ data class TugasUiState(
     val totalCount: Int = 0,
     val todayCount: Int = 0,
     val scheduledCount: Int = 0,
+    val doneCount: Int = 0,
     val allCount: Int = 0,
     val overdueCount: Int = 0,
     val completedCount: Int = 0,
     val error: String? = null
 ) {
+    /**
+     * Persentase penyelesaian tugas (0 - 100%).
+     */
     val progressPercentage: Int
         get() = if (totalCount > 0) (completedCount.toFloat() / totalCount * 100).toInt() else 0
 }
 
+/**
+ * ViewModel untuk mengelola state dan operasi bisnis modul Tugas / To-Do.
+ *
+ * Menyediakan:
+ * - Reactive flow kombinasi antara Room database, query pencarian, dan filter kategori.
+ * - Operasi CRUD: tambah tugas, perbarui tugas, hapus tugas.
+ * - Toggle cepat status tugas (centang / batalkan centang).
+ * - Rotasi status berurutan (TODO -> IN_PROGRESS -> DONE).
+ */
 @HiltViewModel
 class TugasViewModel @Inject constructor(
     private val taskRepository: TaskRepository
@@ -39,22 +68,26 @@ class TugasViewModel @Inject constructor(
     private val _selectedCategory = MutableStateFlow(TaskCategory.TODAY)
     val selectedCategory: StateFlow<TaskCategory> = _selectedCategory
 
+    /**
+     * Aliran data UI utama yang menggabungkan tasks dari database Room,
+     * filter pencarian, dan filter kategori secara reaktif.
+     */
     val uiState: StateFlow<TugasUiState> = combine(
         taskRepository.getAllTasks(),
         _searchQuery,
         _selectedCategory
     ) { allTasks, query, category ->
-        val todayCount = allTasks.count { TaskDateFormatter.isToday(it.dueAt) && !it.isDone }
+        val todayCount = allTasks.count { (TaskDateFormatter.isToday(it.dueAt) || it.dueAt == null) && !it.isDone }
         val scheduledCount = allTasks.count { TaskDateFormatter.isScheduled(it.dueAt) && !it.isDone }
-        val allCount = allTasks.count { !it.isDone }
+        val completedCount = allTasks.count { it.isDone || it.status == "DONE" }
+        val allCount = allTasks.size
         val overdueCount = allTasks.count { TaskDateFormatter.isOverdue(it.dueAt, it.isDone) }
-        val completedCount = allTasks.count { it.isDone }
 
         val categoryFiltered = when (category) {
-            TaskCategory.TODAY -> allTasks.filter { TaskDateFormatter.isToday(it.dueAt) }
-            TaskCategory.SCHEDULED -> allTasks.filter { TaskDateFormatter.isScheduled(it.dueAt) }
+            TaskCategory.TODAY -> allTasks.filter { (TaskDateFormatter.isToday(it.dueAt) || it.dueAt == null) && !it.isDone }
+            TaskCategory.SCHEDULED -> allTasks.filter { TaskDateFormatter.isScheduled(it.dueAt) && !it.isDone }
+            TaskCategory.DONE -> allTasks.filter { it.isDone || it.status == "DONE" }
             TaskCategory.ALL -> allTasks
-            TaskCategory.OVERDUE -> allTasks.filter { TaskDateFormatter.isOverdue(it.dueAt, it.isDone) }
         }
 
         val searchFiltered = categoryFiltered.filter { task ->
@@ -74,33 +107,44 @@ class TugasViewModel @Inject constructor(
             totalCount = allTasks.size,
             todayCount = todayCount,
             scheduledCount = scheduledCount,
+            doneCount = completedCount,
             allCount = allCount,
             overdueCount = overdueCount,
             completedCount = completedCount
         )
-    }.catch {
-        emit(TugasUiState(error = it.message ?: "Terjadi kesalahan"))
+    }.catch { throwable ->
+        emit(TugasUiState(error = throwable.message ?: "Terjadi kesalahan saat memuat data"))
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = TugasUiState(isLoading = true)
     )
 
+    /**
+     * Memperbarui filter kata kunci pencarian.
+     */
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }
 
+    /**
+     * Memilih filter tab kategori (Hari Ini, Mendatang, Selesai, Semua).
+     */
     fun selectCategory(category: TaskCategory) {
         _selectedCategory.value = category
     }
 
+    /**
+     * Menambahkan tugas baru ke dalam database.
+     */
     fun addTask(
         title: String,
         note: String? = null,
         subTasks: String? = null,
         priority: Int = 1,
         status: String = "TODO",
-        dueAt: Long? = null
+        dueAt: Long? = null,
+        refType: String? = null
     ) {
         viewModelScope.launch {
             val isDone = (status == "DONE")
@@ -112,18 +156,25 @@ class TugasViewModel @Inject constructor(
                     dueAt = dueAt,
                     isDone = isDone,
                     priority = priority,
-                    status = status
+                    status = status,
+                    refType = refType
                 )
             )
         }
     }
 
+    /**
+     * Memperbarui data tugas yang sudah ada.
+     */
     fun updateTask(task: TaskEntity) {
         viewModelScope.launch {
             taskRepository.updateTask(task)
         }
     }
 
+    /**
+     * Memutar status tugas secara berurutan: TODO -> IN_PROGRESS -> DONE -> TODO.
+     */
     fun cycleTaskStatus(task: TaskEntity) {
         viewModelScope.launch {
             val currentStatus = if (task.isDone) TaskStatus.DONE else TaskStatus.fromCode(task.status)
@@ -138,6 +189,9 @@ class TugasViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Menandai tugas selesai atau batal selesai (misal saat checkbox atau swipe diklik).
+     */
     fun toggleTaskDone(task: TaskEntity, isDone: Boolean) {
         viewModelScope.launch {
             val newStatus = if (isDone) TaskStatus.DONE.code else TaskStatus.TODO.code
@@ -150,10 +204,12 @@ class TugasViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Menghapus tugas dari database.
+     */
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
             taskRepository.deleteTask(task)
         }
     }
 }
-

@@ -49,6 +49,7 @@ fun BerandaScreen(
             ) {
                 Box(
                     modifier = Modifier
+                        .statusBarsPadding()
                         .fillMaxWidth()
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center

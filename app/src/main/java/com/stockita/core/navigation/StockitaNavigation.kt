@@ -63,6 +63,7 @@ fun StockitaAppNavigation() {
     val navController = rememberNavController()
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -178,7 +179,7 @@ fun StockitaAppNavigation() {
         NavHost(
             navController = navController,
             startDestination = Screen.Beranda.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
         ) {
             composable(Screen.Beranda.route) {
                 BerandaScreen()
@@ -212,24 +213,32 @@ fun StokMainScreen() {
     val tabs = listOf("Bahan", "Produk", "Mutasi")
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(
-            selectedTabIndex = selectedTabIndex,
-            containerColor = Color.White,
-            contentColor = Orange
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White,
+            shadowElevation = 1.dp
         ) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTabIndex == index,
-                    onClick = { selectedTabIndex = index },
-                    text = {
-                        Text(
-                            text = title,
-                            fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium
+            Box(modifier = Modifier.statusBarsPadding()) {
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = Color.White,
+                    contentColor = Orange
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = {
+                                Text(
+                                    text = title,
+                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            selectedContentColor = Orange,
+                            unselectedContentColor = InkSoft
                         )
-                    },
-                    selectedContentColor = Orange,
-                    unselectedContentColor = InkSoft
-                )
+                    }
+                }
             }
         }
 
@@ -249,24 +258,32 @@ fun LainnyaMainScreen() {
     val tabs = listOf("Resep", "Pengeluaran", "Laporan", "Backup")
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(
-            selectedTabIndex = selectedTabIndex,
-            containerColor = Color.White,
-            contentColor = Orange
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.White,
+            shadowElevation = 1.dp
         ) {
-            tabs.forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTabIndex == index,
-                    onClick = { selectedTabIndex = index },
-                    text = {
-                        Text(
-                            text = title,
-                            fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium
+            Box(modifier = Modifier.statusBarsPadding()) {
+                TabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    containerColor = Color.White,
+                    contentColor = Orange
+                ) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = {
+                                Text(
+                                    text = title,
+                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium
+                                )
+                            },
+                            selectedContentColor = Orange,
+                            unselectedContentColor = InkSoft
                         )
-                    },
-                    selectedContentColor = Orange,
-                    unselectedContentColor = InkSoft
-                )
+                    }
+                }
             }
         }
 

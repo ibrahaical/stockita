@@ -1,22 +1,46 @@
 package com.stockita.feature.tugas.model
 
 import androidx.compose.ui.graphics.Color
+import com.stockita.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 enum class TaskCategory(val label: String, val subtitle: String) {
-    TODAY("Today", "Today's Tasks"),
-    SCHEDULED("Scheduled", "Scheduled Tasks"),
-    ALL("All", "All Tasks"),
-    OVERDUE("Overdue", "Overdue Tasks")
+    TODAY("Hari Ini", "Tugas Hari Ini"),
+    SCHEDULED("Mendatang", "Tugas Mendatang"),
+    DONE("Selesai", "Tugas Selesai"),
+    ALL("Semua", "Semua Tugas")
+}
+
+enum class TaskTag(
+    val code: String,
+    val label: String,
+    val bg: Color,
+    val color: Color
+) {
+    UMUM("UMUM", "Umum", AccentLavenderBg, AccentLavender),
+    STOK("STOK", "Stok", AccentPeachBg, AccentPeach),
+    PESANAN("PESANAN", "Pesanan", AccentBlueBg, AccentBlue),
+    KEUANGAN("KEUANGAN", "Keuangan", AccentMintBg, AccentMint),
+    PELANGGAN("PELANGGAN", "Pelanggan", AccentPinkBg, AccentPink);
+
+    companion object {
+        fun fromRefType(refType: String?): TaskTag = when (refType?.uppercase()) {
+            "MATERIAL", "PRODUCT", "STOK" -> STOK
+            "ORDER", "TRANSACTION", "PESANAN" -> PESANAN
+            "EXPENSE", "KEUANGAN" -> KEUANGAN
+            "CUSTOMER", "PELANGGAN" -> PELANGGAN
+            else -> UMUM
+        }
+    }
 }
 
 enum class TaskStatus(val code: String, val label: String) {
     TODO("TODO", "To Do"),
-    IN_PROGRESS("IN_PROGRESS", "In Progress"),
-    DONE("DONE", "Done");
+    IN_PROGRESS("IN_PROGRESS", "Diproses"),
+    DONE("DONE", "Selesai");
 
     fun nextStatus(): TaskStatus = when (this) {
         TODO -> IN_PROGRESS
@@ -31,9 +55,9 @@ enum class TaskStatus(val code: String, val label: String) {
 }
 
 enum class TaskPriority(val level: Int, val label: String, val color: Color, val badgeBg: Color) {
-    LOW(0, "Rendah", Color(0xFF4B5563), Color(0xFFF3F4F6)),
-    MEDIUM(1, "Sedang", Color(0xFFD97706), Color(0xFFFEF3C7)),
-    HIGH(2, "Tinggi", Color(0xFFDC2626), Color(0xFFFEE2E2));
+    LOW(0, "Rendah", TextSecondary, SurfaceMuted),
+    MEDIUM(1, "Sedang", WarningText, WarningBg),
+    HIGH(2, "Tinggi", DangerText, DangerBg);
 
     companion object {
         fun fromLevel(level: Int): TaskPriority =
@@ -54,14 +78,14 @@ object TaskDateFormatter {
         val isTomorrow = tomorrow.get(Calendar.YEAR) == target.get(Calendar.YEAR) &&
                 tomorrow.get(Calendar.DAY_OF_YEAR) == target.get(Calendar.DAY_OF_YEAR)
 
-        val timeFormat = SimpleDateFormat("h:mm a", Locale.ENGLISH)
+        val timeFormat = SimpleDateFormat("HH:mm", Locale.forLanguageTag("id-ID"))
         val formattedTime = timeFormat.format(Date(timestamp))
 
         return when {
-            isToday -> "Today, $formattedTime"
-            isTomorrow -> "Tomorrow, $formattedTime"
+            isToday -> "Hari ini, $formattedTime"
+            isTomorrow -> "Besok, $formattedTime"
             else -> {
-                val dateFormat = SimpleDateFormat("d MMM, h:mm a", Locale.ENGLISH)
+                val dateFormat = SimpleDateFormat("d MMM, HH:mm", Locale.forLanguageTag("id-ID"))
                 dateFormat.format(Date(timestamp))
             }
         }
@@ -108,4 +132,3 @@ object TaskDateFormatter {
         return timestamp < System.currentTimeMillis()
     }
 }
-

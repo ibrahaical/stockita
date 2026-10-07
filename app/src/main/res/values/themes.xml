@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Stockita" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Stockita" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#FFFF6900</item>
+        <item name="android:colorPrimaryDark">#FFE05600</item>
+        <item name="android:colorAccent">#FFFF6900</item>
+        <item name="android:statusBarColor">#FFFFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
 </resources>
